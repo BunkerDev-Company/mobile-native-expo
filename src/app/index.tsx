@@ -1,33 +1,56 @@
+import ProductCard from '@/components/products/product-card';
 import { defaultStyle } from '@/constants/fonts';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import axios, { AxiosInstance } from "axios";
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+export type ProductDto = {
+  id: string;
+  name: string;
+  price: number;
+  image?: string;
+  brand: string;
+};
+
+const api: AxiosInstance = axios.create({
+  baseURL: process.env.EXPO_PUBLIC_API_URL + "/api",
+  timeout: 40000,
+  withCredentials: true,
+});
 
 export default function HomeScreen() {
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [search, setSearch] = useState<string>("")
+  const [search, setSearch] = useState<string>("");
+  const [products, setProducts] = useState<ProductDto[]>([]);
 
   const press = () => {
     setIsOpen(!isOpen);
   }
 
+  const loadProducts = async () => {
+    const response = await api.get<ProductDto[]>("/product/all");
+
+    const filtered = response.data.filter((x) =>
+      x.name.toLowerCase().includes(search.toLowerCase())
+    );
+
+    setProducts(filtered);
+  }
+
   useEffect(() => {
-    if (search == "12345") {
-      setIsOpen(true);
-    }
-    else {
-      if (isOpen) setIsOpen(false);
-    }
+    loadProducts();
   }, [search])
+
+  useEffect(() => {
+    loadProducts();
+  }, [])
 
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        {isOpen ? (
-          <Text>Я открыт</Text>
-          ) : (<></>)}
         <View style={{width: "100%", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12}}>
           <Image style={{width: 24, height: 24}} source={require("../../assets/images/search.png")}></Image>
           <TextInput
@@ -68,6 +91,20 @@ export default function HomeScreen() {
             <Text style={{...defaultStyle.fontDefault, fontSize: 11, color: "#8A8A8E"}}>Дарим по 500 ₽ — тебе и приведенному другу</Text>
             <Image style={{width: 24, height: 24, position: "absolute", right: 12, top: 12}} source={require("../../assets/images/chevron-down.png")}></Image>
           </View>
+        </View>
+        <View>
+          <Text style={{fontSize: 24, fontWeight: "bold", marginBottom: 8}}>Товары</Text>
+          <FlatList
+            data={products}
+            horizontal={true}
+            renderItem={({item}) => 
+            <ProductCard 
+              {...item} 
+              onAddToCart={() => {}}  
+              key={item.id} 
+            />}
+            keyExtractor={item => item.id.toString()}
+          />
         </View>
       </SafeAreaView>
     </View>
