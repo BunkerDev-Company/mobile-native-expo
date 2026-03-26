@@ -1,9 +1,11 @@
+import api from '@/api/api';
 import ProductCard from '@/components/products/product-card';
+import LoadingScreen from '@/components/ui/loading-screen';
 import { defaultStyle } from '@/constants/fonts';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import axios, { AxiosInstance } from "axios";
+import { useAuth } from '@/contexts/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,19 +17,35 @@ export type ProductDto = {
   brand: string;
 };
 
-const api: AxiosInstance = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL + "/api",
-  timeout: 40000,
-  withCredentials: true,
-});
+export type UserDto = {
+  id: string;
+  username?: string;
+  score?: number;
+  fio?: string;
+  address?: string;
+  email?: string;
+  phone: string;
+} | undefined;
 
 export default function HomeScreen() {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [search, setSearch] = useState<string>("");
   const [products, setProducts] = useState<ProductDto[]>([]);
+  const [user, setUser] = useState<UserDto>(undefined);
+  const { isAuthenticated, logout, authReady, startSmsLogin, verifySmsLogin } = useAuth();
+  const [authStatus, setAuthStatus] = useState<number>(0);
+  const authStatusRef = useRef<number>(0);
+  const [phone, setPhone] = useState<string>("");
+  const [code, setCode] = useState<string>("");
 
   const press = () => {
     setIsOpen(!isOpen);
+  }
+
+  const loadUser = async () => {
+    const response = await api.get<UserDto>("/user/me");
+
+    setUser(response.data);
   }
 
   const loadProducts = async () => {
@@ -40,13 +58,40 @@ export default function HomeScreen() {
     setProducts(filtered);
   }
 
-  useEffect(() => {
-    loadProducts();
-  }, [search])
+  const onPressAuth = async () => {
+    if (authStatusRef.current == 0) {
+      startSmsLogin(phone);
+      authStatusRef.current = 1;
+      setAuthStatus(1);
+      setCode("");
+    }
+    else if (authStatusRef.current == 1) {
+      verifySmsLogin(phone, code);
+      authStatusRef.current = 2;
+      setAuthStatus(2);
+    }
+  }
+
+  const onPressLogout = async () => {
+    logout();
+  }
+
 
   useEffect(() => {
-    loadProducts();
-  }, [])
+    if (isAuthenticated) loadProducts();
+  }, [search, isAuthenticated])
+
+  useEffect(() => {
+    if (isAuthenticated) loadUser();
+    else {
+      setUser(undefined);
+      setAuthStatus(0);
+      authStatusRef.current = 0;
+    }
+
+  }, [isAuthenticated])
+
+  if (!authReady) return (<LoadingScreen></LoadingScreen>);
 
   return (
     <View style={styles.container}>
@@ -63,6 +108,51 @@ export default function HomeScreen() {
             style={{width: "100%", color: "#000000", fontSize: 14}}
           />
         </View>
+        {isAuthenticated ? (
+          <View style={{width: "100%", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 16, justifyContent: "space-between"}}>
+            <Text>Username: {user?.username}</Text>
+            <TouchableOpacity onPress={onPressLogout}>
+            <View style={{width: "auto", backgroundColor: "#000000", flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12}}>
+              <Text style={{color: "#FFFFFF"}}>Выйти</Text>
+            </View>
+          </TouchableOpacity>
+          </View>
+        ) : (
+            <View style={{}}>
+          <Text style={{fontSize: 24, fontWeight: "bold", marginBottom: 8}}>Авторизация</Text>
+          <View style={{marginBottom: 8, width: "100%", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12}}>
+            <TextInput
+              value={phone}
+              placeholder='Телефон'
+              onChangeText={(e) => {setPhone(e)}}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={{width: "100%", color: "#000000", fontSize: 14}}
+            />
+          </View>
+          {authStatus == 0 ? (<></>) : (
+            <View style={{width: "100%", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12}}>
+              <TextInput
+                value={code}
+                placeholder='Код'
+                onChangeText={(e) => {setCode(e)}}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={{width: "100%", color: "#000000", fontSize: 14}}
+              />
+            </View>
+          )}
+          {authStatus == 2 ? (<></>) : (
+          <TouchableOpacity onPress={onPressAuth}>
+            <View style={{width: "100%", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12}}>
+              <Text>Авторизация</Text>
+            </View>
+          </TouchableOpacity>
+          )}
+        </View>
+        )}
+        
+        
         <View style={{flexDirection: "row", justifyContent: "space-between", gap: 12}}>
           <LinearGradient
             colors={['#000000', '#FF0051']}
